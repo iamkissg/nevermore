@@ -5,9 +5,7 @@ import os
 import torch
 from torch.utils.data import Dataset, DataLoader
 
-import config
 from util import load_word2idx_idx2word, load_vocab
-
 
 class Poemsets(Dataset):
     def __init__(self, fn):

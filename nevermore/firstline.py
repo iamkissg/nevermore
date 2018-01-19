@@ -1,21 +1,18 @@
 # -*- coding: utf-8 -*-
 
-import math
-import json
 import logging.handlers
 import os
 import random
 import re
 
 import requests
-from scipy.spatial.distance import cosine
+import kenlm
 
 import config
 from util import load_embedding, word2idx_or_selfmap, read_pingshuiyun, read_shixuehanying, load_word2vec
 
 # ============
 # log setting
-# ============
 
 # Because 'Ping Shui Yun' is incomplete, set log for logging missing word
 log_formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="[%Y-%m-%d %H:%M:%S]")
@@ -29,8 +26,19 @@ logger.addHandler(file_handler)
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(log_formatter)
 logger.addHandler(console_handler)
+# ************
 
 RE_RHYMENAME = re.compile(r"""rhymeName">(.+?)<""")
+
+
+# because words in 'Shi Xue Han Ying' are represented as str, we read_pingshuiyun(use_index=False)
+# it's more convenient to use str.
+pingzes, yuns = read_pingshuiyun(use_index=False)
+topic_class, class_phrase = read_shixuehanying()
+class_topic = {c: t for t, cs in topic_class.items() for c in cs}
+LM = os.path.join(os.path.dirname(__file__), '..', 'data', 'rnnpg_data_emnlp-2014',
+                  'partitions_in_Table_2', 'poemlm', 'qts.klm')
+kmodel = kenlm.Model(LM)
 
 
 def generate_one_candicate(phrases, classes, length=7, pattern=-1):
@@ -92,30 +100,30 @@ def generate_one_candicate(phrases, classes, length=7, pattern=-1):
                     # maybe at the very beginning, there is no satisfied phrases
                     avoid_phrases = {p for p in phrases if len(p) != 2 and len(p) != 4}
                     mutual_info -= 0.8
-
-        for i, word in enumerate(phrase):
-            try:
-                # check ping/ze
-                if (PATTERN[0][pos + i] == 0) or ((PATTERN[0][pos + i] == -1) ^ pingshuiyun[word]):
-                    continue
-                else:
-                    avoid_phrases.add(phrase)
-                    break
-            except KeyError:
-                # this error results from the incompleteness of pingshuiyun.txt, find the ping/ze on web
-                resp = requests.get("http://gd.sou-yun.com/QR.aspx?c={word}".format(word=word))
-                rhymename = RE_RHYMENAME.findall(resp.text)[0][-1]
-                pingshuiyun[word] = pingshuiyun[rhymename]
-                logging.info("{word} -> {rhymename}.".format(word=word, rhymename=rhymename))
         else:
-            candicate.extend(list(phrase))
-            mode.append(pos + len(phrase))
-            pos = len(candicate)  # move pos to the end of the current words
-            used_phrases.add(phrase)
-            if length - len(candicate) == 5:
-                avoid_phrases = set([p for p in phrases if len(p) != 2 and len(p) != 5]).union(used_phrases)
+            for i, word in enumerate(phrase):
+                try:
+                    # check ping/ze
+                    if (PATTERN[0][pos + i] == 0) or ((PATTERN[0][pos + i] == -1) ^ pingzes[word]):
+                        continue
+                    else:
+                        avoid_phrases.add(phrase)
+                        break
+                except KeyError:
+                    # this error results from the incompleteness of pingshuiyun.txt, find the ping/ze on web
+                    # resp = requests.get("http://gd.sou-yun.com/QR.aspx?c={word}".format(word=word))
+                    # rhymename = RE_RHYMENAME.findall(resp.text)[0][-1]
+                    # logging.info("{word} -> {rhymename}.".format(word=word, rhymename=rhymename))
+                    continue
             else:
-                avoid_phrases = set([p for p in phrases if len(p) != 3]).union(used_phrases)
+                candicate.extend(list(phrase))
+                mode.append(pos + len(phrase))
+                pos = len(candicate)  # move pos to the end of the current words
+                used_phrases.add(phrase)
+                if length - len(candicate) == 5:
+                    avoid_phrases = set([p for p in phrases if len(p) != 2 and len(p) != 5]).union(used_phrases)
+                else:
+                    avoid_phrases = set([p for p in phrases if len(p) != 3]).union(used_phrases)
     return candicate, mode, PATTERN, mutual_info
 
 
@@ -126,8 +134,7 @@ def select_best(cmms, k=1):
     mutual_info_scores = {}
     for candicate, mode, mutual_info in cmms:
         try:
-            cohesion_scores["".join(candicate)] = sum([word2vec.wv.n_similarity(candicate[p:m], candicate[m:n])
-                                                       for p, m, n in zip(mode[:-2], mode[1:-1], mode[2:])])
+            cohesion_scores["".join(candicate)] = kmodel.score(" ".join(candicate))
         except KeyError:  # some rarely-used Chinese characters maybe not included in word2vec model, just let it go.
             cohesion_scores["".join(candicate)] = -100
         mutual_info_scores["".join(candicate)] = mutual_info
@@ -140,7 +147,7 @@ def select_best(cmms, k=1):
     return list(chosen[0])
 
 
-def make_firstline(inputs, n_candicates=25):
+def make_firstline(inputs, n_candicates=66):
     """make first line for a poem"""
 
     # inputs can be a whitespace delimited str whose first char should be an integer, or a sequence
@@ -170,12 +177,13 @@ def make_firstline(inputs, n_candicates=25):
     return cpms[index]
 
 
-# because words in 'Shi Xue Han Ying' are represented as str, we read_pingshuiyun(use_index=False)
-# it's more convenient to use str.
-pingshuiyun = read_pingshuiyun(use_index=False)
-topic_class, class_phrase = read_shixuehanying()
-class_topic = {c: t for t, cs in topic_class.items() for c in cs}
-word2vec = load_word2vec()
 if __name__ == '__main__':
-    print(make_firstline("5 荷"))
-    print(make_firstline("7 诗"))
+    import argparse
+    argparser = argparse.ArgumentParser()
+    argparser.add_argument('-n', '--qtype', type=int, default=7,
+                           help="Specify 5-characters quatrain or 7-characters quatrain.")
+    argparser.add_argument('-w', '--qtopic', type=str, default="春",
+                           help="Specify topic for quatrain.")
+    args = argparser.parse_args()
+
+    print("".join(make_firstline(str(args.qtype) + " " + args.qtopic)[0]))

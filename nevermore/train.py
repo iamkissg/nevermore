@@ -87,7 +87,7 @@ for epoch in range(epochs):
         loss = criterion(y, Variable(torch.LongTensor(poems[:, 3, 1:])).contiguous().view(-1))
         loss.backward()
         optimizer.step()
-        print(loss)
+        print(loss.data[0])
 
         # the following lines is used for checking whether the network works well.
         hidden = pg.init_hidden(batch_size)
@@ -100,6 +100,6 @@ for epoch in range(epochs):
         a, hidden = pg.forward(w=Variable(torch.LongTensor([[word2idx[w] for w in list("白")]])),
                                s=Variable(torch.LongTensor([[word2idx[w] for w in list("两个黄鹂鸣翠柳")]])),
                                hidden=hidden)
-        print("indexes", np.argmax(a.data.numpy(), axis=1))
-        print([idx2word[i] for i in np.argmax(a.data.numpy(), axis=1)])
+        # print("indexes", np.argmax(a.data.numpy(), axis=1))
+        # print([idx2word[i] for i in np.argmax(a.data.numpy(), axis=1)])
     torch.save(pg.state_dict(), "{dir}/{mode}/{epoch}_new2.chkpt".format(dir=config.dir_chkpt, mode=mode, epoch=epoch))

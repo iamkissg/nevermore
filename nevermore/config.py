@@ -9,13 +9,13 @@ dir_rnnpg = os.path.join(dir_data, "rnnpg_data_emnlp-2014")
 dir_poemlm = os.path.join(dir_rnnpg, "partitions_in_Table_2", "poemlm")
 
 # file path
-
 path_pingshuiyun = os.path.join(dir_data, "pingshuiyun.txt")  # Pingshuiyun contains the Ping/Ze of words, incomplete
 path_shixuehanying = os.path.join(dir_data, "shixuehanying.txt")  # Shixuehanying contains the category of words
 path_embedding = os.path.join(dir_data, "embedding_word2vec.txt")
 path_vocab = os.path.join(dir_data, "vocab.txt")
 
-# 0 for either, 1 for Ping, -1 for Ze
+# The most common tonals for quatrain
+# (0 for either, 1 for Ping, -1 for Ze)
 QUATRAIN_5 = [
     [[0, -1, 1, 1, -1], [1, 1, -1, -1, 1], [0, 1, 1, -1, -1], [0, -1, -1, 1, 1]],  # 首句仄起仄收
     [[0, -1, -1, 1, 1], [1, 1, -1, -1, 1], [0, 1, 1, -1, -1], [0, -1, -1, 1, 1]],  # 首句仄起平收

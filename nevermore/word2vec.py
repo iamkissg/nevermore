@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import os
-from collections import Counter
 
 from gensim.models import Word2Vec
 

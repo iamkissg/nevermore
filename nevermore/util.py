@@ -22,6 +22,7 @@ def load_word2idx_idx2word(vocab=None):
 
 
 def word2idx_or_selfmap(index=False):
+    """a helper function"""
     if index:
         word2idx, _ = load_word2idx_idx2word()
         return lambda w: word2idx[w]
@@ -30,6 +31,7 @@ def word2idx_or_selfmap(index=False):
 
 
 def load_word2vec():
+    """load gensim word2vec model"""
     return Word2Vec.load(os.path.join(config.dir_data, "word2vec.model"))
 
 
@@ -67,8 +69,12 @@ def get_weight_matrix(embedding, word2idx, embedding_dim=256):
 
 def read_pingshuiyun(use_index=False):
     """get the Ping/Ze dict of each word based on '平水韵 (Ping Shui Yun)' """
-    pingzes = {}  # dict of pingze
+    pingzes = {}  # dict of Pingze
+    yuns = {}  # dict of Yun
+
     is_ping = False
+    word2idx, _ = load_word2idx_idx2word()
+    included_words = word2idx.keys()
 
     F = word2idx_or_selfmap(use_index)
 
@@ -79,20 +85,19 @@ def read_pingshuiyun(use_index=False):
                 is_ping = not is_ping
                 continue
             for word in line:
-                # there may be some word in 'Ping Shui Yun' but not in vocab.
-                try:
-                    # one problem is some words have a variety of pronunciation, like "不"
-                    # these words will be labeled as Ze.
+                # there may be some word in 'Ping Shui Yun' but not in vocab
+                # one problem is some words have a variety of pronunciation, like "不"
+                # these words will be labeled as Ze.
+                if word in included_words:
                     pingzes[F(word)] = is_ping
-                except KeyError:
+                else:
                     continue
-    return pingzes
+            yuns[F(line[0])] = [F(w) for w in list(line) if w in included_words]
+    return pingzes, yuns
 
 
 def read_shixuehanying():
-    """
-    get topic-class mapping as well as class-phrase mapping according to '诗学含英 (Shi Xue Han Ying)'
-    """
+    """get topic-class mapping as well as class-phrase mapping according to '诗学含英 (Shi Xue Han Ying)'"""
     topic_class = {}
     class_phrase = {}
 
@@ -117,6 +122,4 @@ if __name__ == '__main__':
     # ===== #
     # test  #
     # ===== #
-
-    # it takes much time
-    print(load_embedding(os.path.join(config.dir_data, "embedding_word2vec.txt"), use_index=True))
+    print(load_embedding(config.path_embedding))
